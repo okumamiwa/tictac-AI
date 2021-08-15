@@ -49,18 +49,6 @@ xCell = pictures [ rotate 45.0 $ rectangleSolid side 10.0
 oCell :: Picture
 oCell = thickCircle (min cWidth cHeight * 0.25) 10.0
 
-
-mouseCoord :: (Integral a, Integral b) => (Float, Float) -> (a, b)
-mouseCoord (x, y) = ( floor ((y + (fromIntegral sHeight * 0.5)) / cHeight)
-                    , floor ((x + (fromIntegral sHeight * 0.5)) / cWidth)
-                    )
-
-{-switch :: Game -> Game
-switch game =
-  case player game of
-    PlayerX -> game { player = PlayerO }
-    PlayerO -> game { player = PlayerX }-}
-
 playAI :: MVar Game -> Game -> IO ()
 playAI move g = void $ forkIO $ do
   randomRIO (100000, 100000) >>= threadDelay
@@ -78,26 +66,27 @@ playAI move g = void $ forkIO $ do
       newB <- (plays !!) <$> randomRIO (0, length plays - 1)
       putMVar move Game{gBoard=newB, state=s}
 
+conv = (+1) . min 1 . max (-1) . fromIntegral . floor . (/100) . (+50)
 
-changeGame :: MVar Game -> Event-> (Game, Player)-> IO (Game, Player)
-changeGame move (EventKey (MouseButton LeftButton) Up _ (x, y)) (g, PlayerX) = do
-  let snap = (+1) . min 1 . max (-1) . fromIntegral . floor . (/100) . (+50)
-      gx   = snap x
-      gy   = snap y
-      b    = gBoard g
-      s    = state g
-    in case (b !! gx) !! gy of
-        Just _  -> return (g, PlayerX)
-        Nothing -> do
-          let newB = ((ix gx . ix gy) ?~ PlayerX) b
-              newGame = Game{gBoard=newB, state = s}
-          playAI move newGame
-          return (newGame, PlayerO)
-changeGame _ _ (g, p) = return (g, p)
+playTurn :: MVar Game -> (Game, Player) -> (Int, Int) -> IO (Game, Player)
+playTurn move (game, p) (x, y) = do
+  let b = gBoard game
+      s = state game
+    in  case (b !! x) !! y of
+          Just _  -> return (game, p)
+          Nothing -> do
+            let newB = ((ix x . ix y) ?~ p) b
+                newGame = checkOver Game{gBoard=newB, state=s}
+            playAI move newGame
+            return (newGame, PlayerO)
 
-snapPictureToCell pic (x, y) = translate i j pic
-  where i = fromIntegral y * cWidth + cWidth *  0.5
-        j = fromIntegral x * cHeight + cHeight * 0.5
+playingGame :: MVar Game -> Event -> (Game, Player) -> IO (Game, Player)
+playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, PlayerX) = do
+  case state g of
+    Playing    -> playTurn move (g, PlayerX) (conv x, conv y)
+    GameOver _ -> return (initialGame, PlayerO)
+playingGame move _ (g, PlayerX) = return (g, PlayerX)
+
 
 boardGrid :: Picture
 boardGrid =
@@ -175,7 +164,7 @@ gameOverPicture winner board = return $ color (outColor winner) (plays board)
 
 gameScreen :: (Game, Player) -> IO Picture
 gameScreen (game, player) =
-  case state game of 
+  case state game of
     Playing         -> gamePicture (gBoard game, player)
     GameOver winner -> gameOverPicture winner(gBoard game)
 
@@ -198,4 +187,4 @@ step _ _ state = return state
 main :: IO ()
 main = do
   move <- newEmptyMVar
-  playIO window background 10 (initialGame, PlayerX) gameScreen (changeGame move) (step move)
+  playIO window background 10 (initialGame, PlayerX) gameScreen (playingGame move) (step move)
