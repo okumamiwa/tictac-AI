@@ -1,5 +1,4 @@
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TupleSections #-}
 module Main where
 
 import Graphics.Gloss ( display, makeColor, line, rotate, Color, Display(InWindow), Picture (Pictures), rectangleSolid, thickCircle )
@@ -62,34 +61,39 @@ switch game =
     PlayerX -> game { player = PlayerO }
     PlayerO -> game { player = PlayerX }-}
 
-playAI :: MVar Board -> Board -> IO ()
-playAI move b = void $ forkIO $ do
+playAI :: MVar Game -> Game -> IO ()
+playAI move g = void $ forkIO $ do
   randomRIO (100000, 100000) >>= threadDelay
-  let plays = [ ((ix x . ix y) ?~ PlayerO) b
+  let b = gBoard g
+      s = state g
+      plays = [ ((ix x . ix y) ?~ PlayerO) b
               | x <- [0..2]
               , y <- [0..2]
               , Nothing <- [ (b !! x) !! y ]
               ]
   case plays of
     [] -> do
-      putMVar move b
+      putMVar move g
     _  -> do
       newB <- (plays !!) <$> randomRIO (0, length plays - 1)
-      putMVar move newB
+      putMVar move Game{gBoard=newB, state=s}
 
 
-changeGame :: MVar Board -> Event-> (Board, Player)-> IO (Board, Player)
-changeGame move (EventKey (MouseButton LeftButton) Up _ (x, y)) (b, PlayerX) = do
+changeGame :: MVar Game -> Event-> (Game, Player)-> IO (Game, Player)
+changeGame move (EventKey (MouseButton LeftButton) Up _ (x, y)) (g, PlayerX) = do
   let snap = (+1) . min 1 . max (-1) . fromIntegral . floor . (/100) . (+50)
       gx   = snap x
       gy   = snap y
+      b    = gBoard g
+      s    = state g
     in case (b !! gx) !! gy of
-        Just _  -> return (b, PlayerX)
+        Just _  -> return (g, PlayerX)
         Nothing -> do
-          let new = ((ix gx . ix gy) ?~ PlayerX) b
-          playAI move new
-          return (new, PlayerO)
-changeGame _ _ (b, p) = return (b, p)
+          let newB = ((ix gx . ix gy) ?~ PlayerX) b
+              newGame = Game{gBoard=newB, state = s}
+          playAI move newGame
+          return (newGame, PlayerO)
+changeGame _ _ (g, p) = return (g, p)
 
 snapPictureToCell pic (x, y) = translate i j pic
   where i = fromIntegral y * cWidth + cWidth *  0.5
@@ -175,8 +179,10 @@ gameScreen (game, player) =
     Playing         -> gamePicture (gBoard game, player)
     GameOver winner -> gameOverPicture winner(gBoard game)
 
-initialGame :: Board
-initialGame = replicate 3(replicate 3 Nothing )
+initialGame :: Game
+initialGame = Game { gBoard = replicate 3(replicate 3 Nothing )
+                   , state = Playing
+                   }
 
 background :: Color
 background = makeColor 0 0 0 1
@@ -184,7 +190,7 @@ background = makeColor 0 0 0 1
 window :: Display
 window = InWindow "Jogo Da Velha" (sWidth, sHeight) (100, 100)
 
-step :: MVar Board -> Float -> (Board, Player) -> IO (Board, Player)
+step :: MVar Game -> Float -> (Game, Player) -> IO (Game, Player)
 step move _ (b, PlayerO) =
   tryTakeMVar move <&> maybe (b, PlayerO) (, PlayerX)
 step _ _ state = return state
@@ -192,4 +198,4 @@ step _ _ state = return state
 main :: IO ()
 main = do
   move <- newEmptyMVar
-  playIO window background 10 (initialGame, PlayerX) gamePicture (changeGame move) (step move)
+  playIO window background 10 (initialGame, PlayerX) gameScreen (changeGame move) (step move)
