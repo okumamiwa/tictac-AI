@@ -16,6 +16,9 @@ extra-source-files:  README.md
 executable tictac-AI
   hs-source-dirs:      src
   main-is:             Main.hs
+  other-modules:       RenderGame,
+                       PlayGame,
+                       Definitions
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5,
                        gloss, 
