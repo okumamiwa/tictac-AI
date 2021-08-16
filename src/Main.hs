@@ -29,9 +29,16 @@ data Game = Game  { gBoard :: Board,
                     state  :: State
                   } deriving (Show)
 
-pXColor = makeColor 255 65 0 0.6
-pOColor = makeColor 85 26 175 0.6
-lineColor = greyN 0.5
+pXColor :: Color
+pXColor = makeColor 255 0 0 0.6
+
+pOColor :: Color
+pOColor = makeColor 0 0 255 0.6
+
+lineColor :: Color
+lineColor = makeColor 255 0 255 0.6
+
+gridColor :: Color
 gridColor = makeColor 255 255 255 1
 
 outColor :: Maybe Player -> Color
@@ -64,16 +71,17 @@ playAI move g = void $ forkIO $ do
       putMVar move g
     _  -> do
       newB <- (plays !!) <$> randomRIO (0, length plays - 1)
-      putMVar move Game{gBoard=newB, state=s}
+      putMVar move $ checkOver Game{gBoard=newB, state=s}
 
+conv :: Float -> Int
 conv = (+1) . min 1 . max (-1) . fromIntegral . floor . (/100) . (+50)
-
 
 aiTurn :: MVar Game -> Game -> IO (Game, Player)
 aiTurn move g = do
   case state g of
     Playing    -> do 
       playAI move g
+      print $ state (checkOver g)
       return (checkOver g, PlayerO)
     GameOver _ -> do
       return (g, PlayerX)
