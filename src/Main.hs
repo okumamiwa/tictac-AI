@@ -57,10 +57,10 @@ playAI move g = void $ forkIO $ do
       plays = [ ((ix x . ix y) ?~ PlayerO) b
               | x <- [0..2]
               , y <- [0..2]
-              , Nothing <- [ (b !! x) !! y ]
+              , Nothing <- [ b !! x !! y ]
               ]
   case plays of
-    [] -> do
+    [] ->
       putMVar move g
     _  -> do
       newB <- (plays !!) <$> randomRIO (0, length plays - 1)
@@ -69,23 +69,30 @@ playAI move g = void $ forkIO $ do
 conv = (+1) . min 1 . max (-1) . fromIntegral . floor . (/100) . (+50)
 
 playTurn :: MVar Game -> (Game, Player) -> (Int, Int) -> IO (Game, Player)
-playTurn move (game, p) (x, y) = do
+playTurn move (game, p) (x, y) =
   let b = gBoard game
       s = state game
     in  case (b !! x) !! y of
           Just _  -> return (game, p)
           Nothing -> do
             let newB = ((ix x . ix y) ?~ p) b
-                newGame = checkOver Game{gBoard=newB, state=s}
+                newGame =  Game{gBoard=newB, state=s}
             playAI move newGame
             return (newGame, PlayerO)
 
 playingGame :: MVar Game -> Event -> (Game, Player) -> IO (Game, Player)
-playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, PlayerX) = do
-  case state g of
-    Playing    -> playTurn move (g, PlayerX) (conv x, conv y)
-    GameOver _ -> return (initialGame, PlayerO)
-playingGame move _ (g, PlayerX) = return (g, PlayerX)
+playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, PlayerX) =
+  let b = gBoard g
+      s = state g
+      (bx, by) = (conv x, conv y)
+    in  case (b !! bx) !! by of
+          Just _  -> return (g, PlayerX)
+          Nothing -> do
+            let newB = ((ix bx . ix by) ?~ PlayerX) b
+                newGame = Game{gBoard=newB, state=s}
+            playAI move newGame
+            return (newGame, PlayerO)
+playingGame _ _ (g, p) = return (g, p)
 
 
 boardGrid :: Picture
@@ -152,7 +159,7 @@ plays b = mconcat
                 PlayerO -> color pOColor oCell
           | x <- [0..2]
           , y <- [0..2]
-          , Just play <- [ (b !! x) !! y ]
+          , Just play <- [ b !! x !! y ]
           ]
 
 
