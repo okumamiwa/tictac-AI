@@ -23,11 +23,11 @@ type Board = [[Maybe Player]]
 
 data State = Playing
            | GameOver (Maybe Player)
-           deriving (Eq)
+           deriving (Eq, Show)
 
 data Game = Game  { gBoard :: Board,
                     state  :: State
-                  }
+                  } deriving (Show)
 
 pXColor = makeColor 255 65 0 0.6
 pOColor = makeColor 85 26 175 0.6
@@ -82,16 +82,19 @@ playTurn move (game, p) (x, y) =
 
 playingGame :: MVar Game -> Event -> (Game, Player) -> IO (Game, Player)
 playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, PlayerX) =
-  let b = gBoard g
-      s = state g
-      (bx, by) = (conv x, conv y)
-    in  case (b !! bx) !! by of
-          Just _  -> return (g, PlayerX)
-          Nothing -> do
-            let newB = ((ix bx . ix by) ?~ PlayerX) b
-                newGame = Game{gBoard=newB, state=s}
-            playAI move newGame
-            return (newGame, PlayerO)
+  case state g of 
+    Playing -> do
+      let b = gBoard g
+          s = state g
+          (bx, by) = (conv x, conv y)
+        in  case (b !! bx) !! by of
+              Just _  -> return (g, PlayerX)
+              Nothing -> do
+                let newB = ((ix bx . ix by) ?~ PlayerX) b
+                    newGame = checkOver Game{gBoard=newB, state=s}
+                playAI move newGame
+                return (checkOver newGame, PlayerO)
+    GameOver _ -> return (initialGame, PlayerX)
 playingGame _ _ (g, p) = return (g, p)
 
 
@@ -140,7 +143,7 @@ countCells = length . filter (Nothing ==) . concat
 
 checkOver :: Game -> Game
 checkOver game
-  | Just p <- winner b = game {state = GameOver $ Just PlayerX}
+  | Just p <- winner b = game {state = GameOver $ Just p}
   | countCells b == 0 = game {state = GameOver Nothing}
   | otherwise = game
     where b = gBoard game
