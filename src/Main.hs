@@ -68,17 +68,15 @@ playAI move g = void $ forkIO $ do
 
 conv = (+1) . min 1 . max (-1) . fromIntegral . floor . (/100) . (+50)
 
-playTurn :: MVar Game -> (Game, Player) -> (Int, Int) -> IO (Game, Player)
-playTurn move (game, p) (x, y) =
-  let b = gBoard game
-      s = state game
-    in  case (b !! x) !! y of
-          Just _  -> return (game, p)
-          Nothing -> do
-            let newB = ((ix x . ix y) ?~ p) b
-                newGame =  Game{gBoard=newB, state=s}
-            playAI move newGame
-            return (newGame, PlayerO)
+
+aiTurn :: MVar Game -> Game -> IO (Game, Player)
+aiTurn move g = do
+  case state g of
+    Playing    -> do 
+      playAI move g
+      return (checkOver g, PlayerO)
+    GameOver _ -> do
+      return (g, PlayerX)
 
 playingGame :: MVar Game -> Event -> (Game, Player) -> IO (Game, Player)
 playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, PlayerX) =
@@ -92,8 +90,7 @@ playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, PlayerX) =
               Nothing -> do
                 let newB = ((ix bx . ix by) ?~ PlayerX) b
                     newGame = checkOver Game{gBoard=newB, state=s}
-                playAI move newGame
-                return (checkOver newGame, PlayerO)
+                aiTurn move newGame
     GameOver _ -> return (initialGame, PlayerX)
 playingGame _ _ (g, p) = return (g, p)
 
@@ -165,18 +162,27 @@ plays b = mconcat
           , Just play <- [ b !! x !! y ]
           ]
 
+playOver :: Maybe Player -> Board -> Picture
+playOver w b = mconcat  [translate  (fromIntegral $ (x - 1) * round cWidth)
+                                    (fromIntegral $ (y - 1) * round cHeight)
+                        $ case play of
+                            PlayerX -> color (outColor w) xCell
+                            PlayerO -> color (outColor w) oCell
+                        | x <- [0..2]
+                        , y <- [0..2]
+                        , Just play <- [b!!x!!y]]
 
 gamePicture :: (Board, Player) -> IO Picture
 gamePicture (b, p) = return $ grid <> plays b
 
 gameOverPicture :: Maybe Player -> Board -> IO Picture
-gameOverPicture winner board = return $ color (outColor winner) (plays board)
+gameOverPicture winner board = return $ playOver winner board
 
 gameScreen :: (Game, Player) -> IO Picture
 gameScreen (game, player) =
   case state game of
     Playing         -> gamePicture (gBoard game, player)
-    GameOver winner -> gameOverPicture winner(gBoard game)
+    GameOver winner -> gameOverPicture winner (gBoard game)
 
 initialGame :: Game
 initialGame = Game { gBoard = replicate 3(replicate 3 Nothing )
