@@ -23,10 +23,6 @@ qWidth = fromIntegral sWidth / fromIntegral n
 qHeight :: Float
 qHeight = fromIntegral sHeight / fromIntegral n
 
-
-indexRange :: ((Int, Int), (Int, Int))
-indexRange = ((0, 0), (n -1, n -1))
-
 --Define cor do X (vermelho)
 pXColor :: Color
 pXColor = makeColor 255 0 0 0.6
@@ -39,6 +35,10 @@ pOColor = makeColor 0 0 255 0.6
 gridColor :: Color
 gridColor = makeColor 255 255 255 1
 
+--Define cor de fundo
+background :: Color
+background = makeColor 0 0 0 1
+
 --Define cor através do ganhador (roxo para empate)
 wColor :: Maybe Player -> Color
 wColor (Just PlayerX) = pXColor
@@ -50,9 +50,9 @@ xCell :: Picture
 xCell = pictures [ rotate (-45.0) $ rectangleSolid side 10.0
                  , rotate   45.0  $ rectangleSolid side 10.0
                  ]
-          where side = qHeight * 0.75
+              where side = qHeight * 0.75
 
 --Define formato do O
 oCell :: Picture
 oCell = thickCircle radius 10.0
-            where radius = qHeight * 0.25
+              where radius = qHeight * 0.25
