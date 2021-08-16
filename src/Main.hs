@@ -1,19 +1,18 @@
 {-# LANGUAGE TupleSections #-}
 module Main where
 
-import Graphics.Gloss ( display, makeColor, line, rotate, Color, Display(InWindow), Picture (Pictures), rectangleSolid, thickCircle )
-import Graphics.Gloss.Data.Color ( greyN )
-import Graphics.Gloss.Data.Picture (pictures, color, translate, Picture(Blank))
-import Graphics.Gloss.Interface.Pure.Game
-import Data.Foldable (asum)
-import Data.Functor ( void, (<&>) )
+import Graphics.Gloss ( makeColor, line, rotate, Color, Display(InWindow), Picture (Pictures), rectangleSolid, thickCircle )
+import Graphics.Gloss.Data.Picture (pictures, color, translate, Picture)
+import Control.Concurrent (MVar, forkIO, threadDelay, putMVar, tryTakeMVar, newEmptyMVar)
+import Graphics.Gloss.Interface.IO.Game ( Key(MouseButton), Event(EventKey), playIO, KeyState(Up), MouseButton(LeftButton) )
+import Data.Functor (void, (<&>))
+import System.Random ( randomRIO )
 import Control.Lens (ix, (?~))
-import Control.Concurrent (threadDelay, forkIO)
-import Control.Concurrent.MVar (MVar, newMVar, tryTakeMVar, putMVar, newEmptyMVar)
-import System.Random
-import Graphics.Gloss.Interface.IO.Game
+import qualified Data.List as L
 import Data.Array ((!), elems)
-import Data.List ( transpose )
+import Data.Foldable (asum)
+import System.Environment ( getArgs )
+
 
 data Player = PlayerX
             | PlayerO
@@ -56,12 +55,17 @@ xCell = pictures [ rotate 45.0 $ rectangleSolid side 10.0
 oCell :: Picture
 oCell = thickCircle (min cWidth cHeight * 0.25) 10.0
 
-playAI :: MVar Game -> Game -> IO ()
-playAI move g = void $ forkIO $ do
+switchPlayer :: Player -> Player
+switchPlayer p
+  | p == PlayerX = PlayerO
+  |otherwise = PlayerX
+
+playAI :: MVar Game -> Game -> Player -> IO ()
+playAI move g p = void $ forkIO $ do
   randomRIO (100000, 100000) >>= threadDelay
   let b = gBoard g
       s = state g
-      plays = [ ((ix x . ix y) ?~ PlayerO) b
+      plays = [ ((ix x . ix y) ?~ p) b
               | x <- [0..2]
               , y <- [0..2]
               , Nothing <- [ b !! x !! y ]
@@ -76,32 +80,32 @@ playAI move g = void $ forkIO $ do
 conv :: Float -> Int
 conv = (+1) . min 1 . max (-1) . fromIntegral . floor . (/100) . (+50)
 
-aiTurn :: MVar Game -> Game -> IO (Game, Player)
-aiTurn move g = do
+aiTurn :: MVar Game -> Game -> Player -> IO (Game, Player)
+aiTurn move g p = do
   case state g of
-    Playing    -> do 
-      playAI move g
-      print $ state (checkOver g)
-      return (checkOver g, PlayerO)
+    Playing    -> do
+      playAI move g p
+      return (checkOver g, p)
     GameOver _ -> do
-      return (g, PlayerX)
+      return (g, switchPlayer p)
 
 playingGame :: MVar Game -> Event -> (Game, Player) -> IO (Game, Player)
-playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, PlayerX) =
-  case state g of 
-    Playing -> do
-      let b = gBoard g
-          s = state g
-          (bx, by) = (conv x, conv y)
-        in  case (b !! bx) !! by of
-              Just _  -> return (g, PlayerX)
-              Nothing -> do
-                let newB = ((ix bx . ix by) ?~ PlayerX) b
-                    newGame = checkOver Game{gBoard=newB, state=s}
-                aiTurn move newGame
-    GameOver _ -> return (initialGame, PlayerX)
+playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, p) =
+  if p == PlayerO && countCells (gBoard g) == 9 then aiTurn move g $ switchPlayer p
+  else
+    case state g of
+      Playing -> do
+        let b = gBoard g
+            s = state g
+            (bx, by) = (conv x, conv y)
+          in  case (b !! bx) !! by of
+                Just _  -> return (g, p)
+                Nothing -> do
+                  let newB = ((ix bx . ix by) ?~ p) b
+                      newGame = checkOver Game{gBoard=newB, state=s}
+                  aiTurn move newGame $ switchPlayer p
+      GameOver _ -> return (initialGame, p)
 playingGame _ _ (g, p) = return (g, p)
-
 
 boardGrid :: Picture
 boardGrid =
@@ -139,7 +143,7 @@ full _                      = Nothing
 winner :: Board -> Maybe Player
 winner b = asum $ map full $ rows ++ cols ++ diags
     where rows  = b
-          cols  = transpose b
+          cols  = L.transpose b
           diags = [[head(head b), b!!1!!1,b!!2!!2],[head b!!2, b!!1!!1,head (b!!2)]]
 
 
@@ -204,11 +208,16 @@ window :: Display
 window = InWindow "Jogo Da Velha" (sWidth, sHeight) (100, 100)
 
 step :: MVar Game -> Float -> (Game, Player) -> IO (Game, Player)
-step move _ (b, PlayerO) =
-  tryTakeMVar move <&> maybe (b, PlayerO) (, PlayerX)
-step _ _ state = return state
+step move _ (b, p) =
+  tryTakeMVar move <&> maybe (b, p) (, switchPlayer p)
 
 main :: IO ()
 main = do
+  args <- getArgs
   move <- newEmptyMVar
-  playIO window background 10 (initialGame, PlayerX) gameScreen (playingGame move) (step move)
+  case args of 
+    [] -> playIO window background 10 (initialGame, PlayerX) gameScreen (playingGame move) (step move)
+    _  -> if head args == "X" 
+          then playIO window background 10 (initialGame, PlayerX) gameScreen (playingGame move) (step move)
+          else playIO window background 10 (initialGame, PlayerO) gameScreen (playingGame move) (step move)
+
