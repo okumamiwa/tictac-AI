@@ -4,7 +4,7 @@ module PlayGame where
 import Graphics.Gloss.Interface.IO.Game (Event (EventKey), Key (MouseButton), KeyState (Up), MouseButton (LeftButton), playIO)
 import Control.Lens (ix, (?~))
 import Control.Concurrent (MVar, forkIO, newEmptyMVar, putMVar, threadDelay, tryTakeMVar)
-import System.Random (randomRIO)
+import System.Random (randomIO, randomRIO)
 import Data.Foldable (asum)
 import Data.Functor (void, (<&>))
 import qualified Data.List as L
@@ -52,25 +52,24 @@ winner b = asum $ map full $ rows ++ cols ++ diags
 --Checa se o jogo terminou
 checkOver :: Game -> Game
 checkOver game
-  | Just p <- winner b = game {state = GameOver $ Just p}
-  | countEmpty b == 0 = game {state = GameOver Nothing}
-  | otherwise = game
-    where b = gBoard game
+    | Just p <- winner b = game {state = GameOver $ Just p}
+    | countEmpty b == 0  = game {state = GameOver Nothing}
+    | otherwise = game
+        where b = gBoard game
 
 --Faz jogada do computador
 playAI :: MVar Game -> Game -> Player -> IO ()
 playAI move g p = void $ forkIO $ do
-  randomRIO (100000, 100000) >>= threadDelay
+  threadDelay 100000
   let b = gBoard g
       s = state g
-      plays = [ ((ix x . ix y) ?~ p) b | x <- [0..2]
-              , y <- [0..2]
+      plays = [ ((ix x . ix y) ?~ p) b | x <- [0..2], y <- [0..2]
               , Nothing <- [ b !! x !! y ]
               ]
   case plays of
     [] -> putMVar move g
     _  -> do newB <- (plays !!) <$> randomRIO (0, length plays - 1)
-             putMVar move $ checkOver Game{gBoard=newB, state=s}
+             putMVar move $ checkOver Game{ gBoard = newB, state = s }
 
 --Verifica estado do jogo antes de fazer jogada do computador
 aiTurn :: MVar Game -> Game -> Player -> IO (Game, Player)
@@ -87,18 +86,18 @@ aiTurn move g p = do
 playingGame :: MVar Game -> Event -> (Game, Player) -> IO (Game, Player)
 playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, p) =
     case state g of
-      Playing -> do
-        let b = gBoard g
-            s = state g
-            (bx, by) = (conv x, conv y)
-          in  case (b !! bx) !! by of
-                Just _  -> return (g, p)
-                Nothing -> do
-                  let newB = ((ix bx . ix by) ?~ p) b
-                      newGame = checkOver Game{gBoard=newB, state=s}
-                  aiTurn move newGame $ switchPlayer p
-      GameOver _ -> return (initialGame, p)
-playingGame move _ (g, p) = 
+        Playing -> do
+            let b = gBoard g
+                s = state g
+                (bx, by) = (conv x, conv y)
+             in case (b !! bx) !! by of
+                    Just _  -> return (g, p)
+                    Nothing -> do
+                    let newB = ((ix bx . ix by) ?~ p) b
+                        newGame = checkOver Game{gBoard=newB, state=s}
+                    aiTurn move newGame $ switchPlayer p
+        GameOver _ -> return (initialGame, p)
+playingGame move _ (g, p) =
     if p == PlayerO && countEmpty (gBoard g) == 9 then aiTurn move g $ switchPlayer p
     else return (g, p)
 

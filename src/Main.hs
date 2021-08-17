@@ -1,8 +1,8 @@
 module Main where
   
-import RenderGame
-import PlayGame
-import Definitions
+import RenderGame ( gameScreen, window )
+import PlayGame( Game, Player(PlayerO, PlayerX), playingGame, step, initialGame )
+import Definitions ( background )
 import Control.Concurrent (MVar, newEmptyMVar)
 import Graphics.Gloss.Interface.IO.Game (playIO)
 import System.Environment (getArgs)
