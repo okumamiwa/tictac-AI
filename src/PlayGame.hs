@@ -4,7 +4,7 @@ module PlayGame where
 import Graphics.Gloss.Interface.IO.Game (Event (EventKey), Key (MouseButton), KeyState (Up), MouseButton (LeftButton), playIO)
 import Control.Lens (ix, (?~))
 import Control.Concurrent (MVar, forkIO, newEmptyMVar, putMVar, threadDelay, tryTakeMVar)
-import System.Random (randomIO, randomRIO)
+import System.Random (randomRIO)
 import Data.Foldable (asum)
 import Data.Functor (void, (<&>))
 import qualified Data.List as L
