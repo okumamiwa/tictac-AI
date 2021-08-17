@@ -84,19 +84,19 @@ aiTurn move g p = do
 --Função para lidar com os eventos de input
 --Se o jogador for O e o tabuleiro estiver vazio, faz a jogada do computador primeiro
 playingGame :: MVar Game -> Event -> (Game, Player) -> IO (Game, Player)
-playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, p) =
-    case state g of
-        Playing -> do
-            let b = gBoard g
-                s = state g
-                (bx, by) = (conv x, conv y)
-             in case (b !! bx) !! by of
-                    Just _  -> return (g, p)
-                    Nothing -> do
-                    let newB = ((ix bx . ix by) ?~ p) b
-                        newGame = checkOver Game{gBoard=newB, state=s}
-                    aiTurn move newGame $ switchPlayer p
-        GameOver _ -> return (initialGame, p)
+playingGame move (EventKey (MouseButton LeftButton) Up _ (x,y)) (g, p) = do
+  case state g of
+    Playing -> do
+      let b = gBoard g
+          s = state g
+          (bx, by) = (conv x, conv y)
+        in case (b !! bx) !! by of
+            Just _  -> return (g, p)
+            Nothing -> do
+              let newB = ((ix bx . ix by) ?~ p) b
+                  newGame = checkOver Game{gBoard=newB, state=s}
+              aiTurn move newGame $ switchPlayer p
+    GameOver _ -> return (initialGame, p)
 playingGame move _ (g, p) =
     if p == PlayerO && countEmpty (gBoard g) == 9 then aiTurn move g $ switchPlayer p
     else return (g, p)
